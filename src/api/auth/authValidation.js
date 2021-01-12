@@ -4,28 +4,17 @@ const Joi = require('joi');
 const jwt = require('jsonwebtoken');
 const { config } = require('../../config');
 
-const registerSchema = Joi.object({
+const loginSchema = Joi.object({
     email: Joi.string()
         .required()
         .lowercase()
         .email({
             minDomainSegments: 2
         }),
-    password: Joi.string()
-        .required(),
-    password_confirmation: Joi.ref('password')
-});
-
-const loginSchema = Joi.object({
-    email: Joi.string()
-        .required()
-        .email({
-            minDomainSegments: 2
-        }),
     password: Joi.string().required()
 });
 
-const forgotPassword = Joi.object({
+const forgotPasswordSchema = Joi.object({
     email: Joi.string()
         .required()
         .email({
@@ -33,24 +22,24 @@ const forgotPassword = Joi.object({
         })
 });
 
-const validate = async (payload, schema, next) => {
-    try {
-        const value = await schema.validateAsync(payload);
-        return next(null, value);
-    } catch (err) {
-        return next(err);
-    }
-};
-
 module.exports = {
-    validateRegisterSchema: async (req, res, next) => {
-        return await validate(req.body, registerSchema, next);
-    },
     validateLoginSchema: async (req, res, next) => {
-        return await validate(req.body, loginSchema, next);
+        try {
+            const value = await loginSchema.validateAsync(req.body);
+            req.validatedBody = value;
+            next();
+        } catch (err) {
+            next(err);
+        }
     },
     forgotPassword: async (req, res, next) => {
-        return await validate(req.body, forgotPassword, next);
+        try {
+            const value = await forgotPasswordSchema.validateAsync(req.body);
+            req.validatedBody = value;
+            next();
+        } catch (err) {
+            next(err);
+        }
     },
     verifyToken: async (req, res, next) => {
         const token = req.headers['x-access-token'];
@@ -59,9 +48,15 @@ module.exports = {
             err.statusCode = 403;
             return next(err);
         }
-        const decodedToken = jwt.verify(token, config.jwt.JSON_WEB_TOKEN_SECRET);
-        req.userId = decodedToken.id;
-        next();
+
+        try {
+            const decodedToken = jwt.verify(token, config.jwt.JSON_WEB_TOKEN_SECRET);
+            req.userId = decodedToken.id;
+            next();
+        } catch (err) {
+            err.statusCode = 401;
+            return next(err);
+        }
     },
     isCurrentUser: async (req, res, next) => {
         const id = req.params.id;
